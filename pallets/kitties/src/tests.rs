@@ -3,11 +3,10 @@ use super::*;
 use crate as kitties;
 use std::cell::RefCell;
 use sp_core::H256;
-use frame_support::{parameter_types, assert_ok, assert_noop};
+use frame_support::{parameter_types, assert_ok, assert_noop, assert_storage_noop};
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup}, testing::Header,
 };
-
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -130,4 +129,73 @@ fn can_breed() {
     });
 }
 
-// TODO: add new test cases for `fn transfer`. Make sure you have covered edge cases
+#[test]
+fn transfer_standard_case() {
+    new_test_ext().execute_with(|| {
+        //given
+        let sender = 100;
+        let to = 10;
+        let kitty_id = 0;
+        assert_ok!(KittiesModule::create(Origin::signed(sender)));
+        assert_eq!(KittiesModule::kitties(sender, kitty_id).is_some(), true);
+
+        //when
+        let result = KittiesModule::transfer(Origin::signed(sender), to, kitty_id);
+
+        //then
+        assert_ok!(result);
+        assert_eq!(last_event(), Event::kitties(crate::Event::<Test>::KittyTransferred(sender, to, kitty_id)));
+        assert_eq!(KittiesModule::kitties(sender, kitty_id).is_some(), false);
+        assert_eq!(KittiesModule::kitties(to, kitty_id).is_some(), true);
+    });
+}
+
+#[test]
+fn transfer_sender_the_same_as_to() {
+    new_test_ext().execute_with(|| {
+        //given
+        let sender = 100;
+        let kitty_id = 0;
+        assert_ok!(KittiesModule::create(Origin::signed(sender)));
+        assert_eq!(KittiesModule::kitties(sender, kitty_id).is_some(), true);
+
+        //when
+        assert_storage_noop!(KittiesModule::transfer(Origin::signed(sender), sender, kitty_id));
+
+        //then
+        assert_eq!(KittiesModule::kitties(sender, kitty_id).is_some(), true);
+    });
+}
+
+#[test]
+fn transfer_sender_the_same_as_to_kitty_does_not_exist() {
+    new_test_ext().execute_with(|| {
+        //given
+        let sender = 100;
+        let kitty_id = 0;
+
+        //when
+        assert_noop!(KittiesModule::transfer(Origin::signed(sender), sender, kitty_id), Error::<Test>::InvalidKittyId);
+
+        //then
+        assert_eq!(KittiesModule::kitties(sender, kitty_id).is_none(), true);
+    });
+}
+
+#[test]
+fn transfer_standard_case_kitty_does_not_exist() {
+    new_test_ext().execute_with(|| {
+        //given
+        let sender = 100;
+        let to = 10;
+        let kitty_id = 0;
+
+        //when
+        assert_noop!(KittiesModule::transfer(Origin::signed(sender), to, kitty_id), Error::<Test>::InvalidKittyId);
+
+        //then
+        assert_eq!(KittiesModule::kitties(sender, kitty_id).is_none(), true);
+        assert_eq!(KittiesModule::kitties(to, kitty_id).is_none(), true);
+
+    });
+}
